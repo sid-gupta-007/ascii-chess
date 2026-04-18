@@ -69,9 +69,18 @@ if public_url:
     print("\nNOTE: This is a free temporary tunnel. It will expire in 60 minutes.")
     print("      To play longer, just run this script again later.")
     
+    # -----> NEW: Automatically copy the URL to the user's clipboard!
+    try:
+        if os.name == 'nt':
+            subprocess.run(["clip"], input=wss_url, text=True)
+            print("\n  [📋] The URL has been AUTOMATICALLY COPIED to your clipboard!")
+            print("       You can just press Ctrl+V to paste it to your friend.")
+    except Exception:
+        pass
+    
     # 3. Automatically launch the game for the host
     print("\nLaunching your game now! Please wait...")
-    time.sleep(3)
+    time.sleep(4)
     try:
         subprocess.run([sys.executable, "chess.py"])
     except KeyboardInterrupt:
