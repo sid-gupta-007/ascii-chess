@@ -4,6 +4,9 @@ import re
 import sys
 import os
 
+if os.name == 'nt' and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 print("="*60)
 print("  ASCIII CHESS — AUTO ONLINE HOST")
 print("  Starting local server & generating public URL...")
@@ -24,17 +27,34 @@ tunnel_process = subprocess.Popen(
     stderr=subprocess.STDOUT,
     text=True,
     encoding="utf-8",
-    errors="replace"
+    errors="replace",
+    bufsize=1
 )
 
 public_url = None
 
-# Read the output from the SSH tunnel until we find the https URL
-for line in tunnel_process.stdout:
-    line = line.strip()
-    if line.startswith("https://"):
-        public_url = line
+# Read the output character by character to avoid hanging on missing newlines
+buffer = ""
+
+print("  [SSH] ", end="")
+sys.stdout.flush()
+
+while True:
+    char = tunnel_process.stdout.read(1)
+    if not char:
         break
+        
+    buffer += char
+    sys.stdout.write(char)
+    sys.stdout.flush()
+    
+    # Check if the URL has appeared anywhere in the buffer yet
+    if "pinggy-free.link" in buffer and ("http://" in buffer or "https://" in buffer):
+        # Extract the URL
+        match = re.search(r'(https?://[a-zA-Z0-9.-]+\.pinggy-free\.link)', buffer)
+        if match:
+            public_url = match.group(1)
+            break
 
 if public_url:
     # Convert https://... to wss://...
