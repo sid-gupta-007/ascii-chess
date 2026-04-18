@@ -1,8 +1,5 @@
 import sys
 import os
-import tty
-import termios
-import select
 
 from .constants import *
 

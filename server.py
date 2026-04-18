@@ -1,14 +1,24 @@
 import asyncio
-import websockets
+from websockets.asyncio.server import serve
 import json
 import random
 import string
+import os
+from http import HTTPStatus
 
 # Active rooms: room_code -> [host_ws, guest_ws]
 rooms = {}
 
 def generate_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+
+# ── HTTP Health Check (for Render / cloud platforms) ──────────
+def health_check(connection, request):
+    """Respond to HTTP health checks so Render knows the server is alive."""
+    if request.path in ("/health", "/healthz"):
+        return connection.respond(HTTPStatus.OK, "OK\n")
+
 
 async def handle_client(websocket):
     try:
@@ -53,7 +63,7 @@ async def handle_client(websocket):
                             except:
                                 pass
 
-    except websockets.exceptions.ConnectionClosed:
+    except Exception:
         pass
     finally:
         # Cleanup disconnected clients
@@ -69,9 +79,17 @@ async def handle_client(websocket):
                     del rooms[code]
 
 async def main():
-    print("Listing for WebSockets on ws://0.0.0.0:8765...")
-    async with websockets.serve(handle_client, "0.0.0.0", 8765):
-        await asyncio.Future()  # Run forever
+    # Use PORT env var (set by Render/Railway/etc.) or default to 8765 for local dev
+    port = int(os.environ.get("PORT", 8765))
+    
+    print(f"Listening for WebSockets on ws://0.0.0.0:{port}...")
+    async with serve(
+        handle_client,
+        "0.0.0.0",
+        port,
+        process_request=health_check,
+    ) as server:
+        await server.serve_forever()
 
 if __name__ == "__main__":
     asyncio.run(main())
