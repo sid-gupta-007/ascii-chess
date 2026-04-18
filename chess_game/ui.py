@@ -758,6 +758,195 @@ class ClassicGame:
 
 
 # ═══════════════════════════════════════════════
+#  ONLINE MODE  —  Real-Time Multiplayer
+# ═══════════════════════════════════════════════
+
+class OnlineGame(InteractiveGame):
+    def __init__(self, network_client, room_code, my_color):
+        super().__init__()
+        self.network = network_client
+        self.room_code = room_code
+        self.my_color = my_color  # 'white' or 'black'
+        self.flipped = (self.my_color == 'black') # Black plays flipped
+        self.opponent_disconnected = False
+
+    def _loop(self):
+        while True:
+            # Consume all incoming network messages
+            while True:
+                msg = self.network.receive()
+                if msg is None:
+                    break
+                
+                msg_type = msg.get('type')
+                if msg_type == 'move':
+                    m = msg.get('move')
+                    # Execute opponent's move
+                    self.board.make_move(m['sr'], m['sc'], m['cr'], m['cc'], m.get('promo'))
+                    self.message = "Opponent moved!"
+                elif msg_type == 'opponent_disconnected':
+                    self.opponent_disconnected = True
+                    self.message = "Opponent disconnected!"
+                elif msg_type == 'error':
+                    self.message = f"Network Error: {msg.get('message')}"
+
+            # Force redraw
+            self._render()
+
+            if self.board.game_over or self.opponent_disconnected:
+                self._render_game_over()
+                # Stop network background loop safely
+                self.network.stop()
+                
+                get_key() # Wait for any key
+                break
+
+            # ── Non-blocking Input (10 ticks per second) ──
+            key = get_key(timeout=0.1)
+            
+            # If no input, just let the loop continue and check network
+            if key is None:
+                continue
+
+            # ── Navigation (Same as interactive) ──
+            if key == 'UP':
+                if self.flipped:
+                    self.cursor[0] = min(7, self.cursor[0] + 1)
+                else:
+                    self.cursor[0] = max(0, self.cursor[0] - 1)
+                self.message = ""
+            elif key == 'DOWN':
+                if self.flipped:
+                    self.cursor[0] = max(0, self.cursor[0] - 1)
+                else:
+                    self.cursor[0] = min(7, self.cursor[0] + 1)
+                self.message = ""
+            elif key == 'LEFT':
+                self.cursor[1] = max(0, self.cursor[1] - 1)
+                self.message = ""
+            elif key == 'RIGHT':
+                self.cursor[1] = min(7, self.cursor[1] + 1)
+                self.message = ""
+
+            # ── Select / Move ──
+            elif key == 'ENTER':
+                self._handle_enter()
+
+            # ── Deselect ──
+            elif key in ('BACKSPACE', 'DELETE', 'ESC'):
+                if self.selected:
+                    self.selected = None
+                    self.legal = []
+                    self.message = "Deselected."
+                else:
+                    self.message = ""
+
+            # ── Commands ──
+            elif key.lower() == 'q':
+                self.network.stop()
+                break
+            elif key.lower() == 'h':
+                self._show_help()
+            elif key.lower() == 'm':
+                self._show_moves()
+            elif key.lower() == 'f':
+                self.flipped = not self.flipped
+                self.message = "Board flipped!"
+            elif key.lower() == 'r':
+                self.board.game_over = True
+                self.board.winner = ('black'
+                    if self.board.current_turn == 'white' else 'white')
+                self.board.game_over_reason = 'resignation'
+
+    def _handle_enter(self):
+        # Reject moves if it's not the player's turn
+        if self.board.current_turn != self.my_color:
+            self.message = "Waiting for opponent..."
+            return
+
+        cr, cc = self.cursor
+
+        if self.selected is None:
+            # ── Nothing selected → try to pick up a piece ──
+            piece = self.board.get(cr, cc)
+            if not piece:
+                self.message = "Empty square. Pick one of your pieces!"
+                return
+            if self.board.color(piece) != self.board.current_turn:
+                self.message = "That's not your piece!"
+                return
+            moves = self.board.legal_moves(cr, cc)
+            if not moves:
+                self.message = "That piece has no legal moves right now."
+                return
+
+            self.selected = (cr, cc)
+            self.legal = moves
+            self.message = f"Selected {square_name(cr, cc)}"
+
+        else:
+            # ── Piece already selected ──
+            sr, sc = self.selected
+
+            # Same square → deselect
+            if (cr, cc) == (sr, sc):
+                self.selected = None
+                self.legal = []
+                self.message = "Deselected."
+                return
+
+            # Clicking another friendly piece → switch selection
+            target_piece = self.board.get(cr, cc)
+            if (target_piece and
+                self.board.color(target_piece) == self.board.current_turn):
+                moves = self.board.legal_moves(cr, cc)
+                if moves:
+                    self.selected = (cr, cc)
+                    self.legal = moves
+                    self.message = f"Switched to {square_name(cr, cc)}"
+                    return
+                else:
+                    self.message = "That piece has no legal moves."
+                    return
+
+            # Not a legal target
+            if (cr, cc) not in self.legal:
+                self.message = "Can't move there!"
+                return
+
+            # ── Pawn promotion ──
+            promo = None
+            moving_piece = self.board.get(sr, sc)
+            promo_row = 0 if self.board.current_turn == 'white' else 7
+            if moving_piece and moving_piece.upper() == 'P' and cr == promo_row:
+                promo = self._ask_promotion()
+
+            # ── Execute the move ──
+            ok, err = self.board.make_move(sr, sc, cr, cc, promo)
+            if ok:
+                self.selected = None
+                self.legal = []
+                last = self.board.move_history[-1]
+                self.message = f"Played: {last}"
+                
+                # SEND TO NETWORK
+                self.network.send({
+                    'type': 'move',
+                    'room': self.room_code,
+                    'move': {
+                        'sr': sr, 'sc': sc, 'cr': cr, 'cc': cc, 'promo': promo
+                    }
+                })
+            else:
+                self.message = err
+
+    def _render_game_over(self):
+        super()._render_game_over()
+        if self.opponent_disconnected:
+            print("\n  Opponent disconnected. Press any key to exit.")
+
+
+# ═══════════════════════════════════════════════
 #  MAIN  —  Mode Selection + Entry Point
 # ═══════════════════════════════════════════════
 
