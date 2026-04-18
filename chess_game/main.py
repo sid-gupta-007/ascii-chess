@@ -104,9 +104,16 @@ def _get_server_uri():
                 if not url:
                     print('  No URL entered.')
                     return None
-                # Normalize: ensure it starts with ws:// or wss://
-                if not url.startswith('ws://') and not url.startswith('wss://'):
+                
+                # Normalize: convert http/https to ws/wss, or prepend wss:// if missing
+                url = url.strip()
+                if url.startswith('http://'):
+                    url = url.replace('http://', 'ws://', 1)
+                elif url.startswith('https://'):
+                    url = url.replace('https://', 'wss://', 1)
+                elif not url.startswith('ws://') and not url.startswith('wss://'):
                     url = 'wss://' + url
+                    
                 return url
         elif server_choice == '2':
             return 'ws://localhost:8765'
