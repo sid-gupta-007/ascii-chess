@@ -22,7 +22,9 @@ tunnel_process = subprocess.Popen(
     ["ssh", "-p", "443", "-o", "StrictHostKeyChecking=no", "-R0:localhost:8765", "a.pinggy.io"],
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
-    text=True
+    text=True,
+    encoding="utf-8",
+    errors="replace"
 )
 
 public_url = None
