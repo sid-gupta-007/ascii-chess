@@ -12,6 +12,7 @@ class ChessBoard:
         self.board = [[None]*8 for _ in range(8)]
         self.current_turn = 'white'
         self.move_history = []
+        self.raw_move_history = []
         self.castling = {
             'K': True, 'Q': True,   # white kingside / queenside
             'k': True, 'q': True,   # black kingside / queenside
@@ -20,7 +21,7 @@ class ChessBoard:
         self.halfmove = 0
         self.fullmove = 1
         self.game_over = False
-        self.winner = None        # 'white', 'black', or None (draw)
+        self.winner = None
         self.game_over_reason = ''
         self.last_move_coords = None
 
@@ -32,6 +33,30 @@ class ChessBoard:
         self.last_tick = None
         
         self._setup()
+
+    def clone(self):
+        """Fast clone for search tree, avoiding slow copy.deepcopy."""
+        new_board = ChessBoard.__new__(ChessBoard)
+        new_board.board = [row[:] for row in self.board]
+        new_board.current_turn = self.current_turn
+        new_board.castling = self.castling.copy()
+        new_board.en_passant = self.en_passant
+        new_board.halfmove = self.halfmove
+        new_board.fullmove = self.fullmove
+        new_board.game_over = self.game_over
+        new_board.winner = self.winner
+        new_board.game_over_reason = self.game_over_reason
+        new_board.last_move_coords = self.last_move_coords
+        
+        # We don't need history for search tree copies
+        new_board.move_history = []
+        new_board.raw_move_history = []
+        
+        # Don't clone timer states for search
+        new_board.time_limit = None
+        new_board.last_tick = None
+        
+        return new_board
 
     def set_timer(self, time_limit, increment):
         self.time_limit = time_limit
@@ -319,6 +344,8 @@ class ChessBoard:
         Execute a move. Returns (success: bool, error_msg: str).
         promo should be 'Q','R','B', or 'N' for pawn promotion.
         """
+        self.update_timer()  # Deduct time spent thinking BEFORE switching turns
+        
         piece = self.board[fr][fc]
         if not piece:
             return False, "No piece at that square."
@@ -430,7 +457,7 @@ class ChessBoard:
             self.fullmove += 1
 
         self.last_move_coords = ((fr, fc), (tr, tc))
-
+        self.raw_move_history.append((fr, fc, tr, tc, promo))
 
         self.current_turn = enemy
         return True, ""

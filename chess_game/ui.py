@@ -983,9 +983,12 @@ class OnlineGame(InteractiveGame):
 
 
 class SinglePlayerGame(InteractiveGame):
-    def __init__(self, player_color='white', level=2, time_limit=None, increment=0):
+    def __init__(self, player_color='white', level=2, time_limit=None, increment=0,
+                 personality=None):
         super().__init__(time_limit, increment)
         self.player_color = player_color
+        self.level = level
+        self.personality = personality
         self.computer_move_msg = ""  # Persistent computer move display
         if player_color == 'black':
             self.flipped = True
@@ -994,17 +997,62 @@ class SinglePlayerGame(InteractiveGame):
         from engine import AIEngine
         self.engine = AIEngine(depth=level)
 
+    def _render_game_over(self):
+        super()._render_game_over()
+        # Overwrite the prompt at the bottom
+        buf = ['\033[3A\033[K']  # Move up 3 lines, clear
+        buf.append('  Play again? [Y]es / [N]o / [A]nalyze Game: ')
+        import sys
+        sys.stdout.write(''.join(buf))
+        sys.stdout.flush()
+
     def _loop(self):
+        game_over_processed = False
         while True:
             self.board.update_timer()
             self._render()
 
             if self.board.game_over:
+                if not game_over_processed:
+                    # Update player stats
+                    try:
+                        from player_data import PlayerProfile
+                        profile = PlayerProfile()
+                        
+                        result = 'draw'
+                        if self.board.winner == self.player_color:
+                            result = 'win'
+                        elif self.board.winner:
+                            result = 'loss'
+                            
+                        # Use 50% as a baseline accuracy if we don't analyze
+                        profile.update_after_game(result, self.level, 50.0)
+                    except ImportError:
+                        pass
+                    game_over_processed = True
+
                 self._render_game_over()
-                key = get_key()
-                if key and key.lower() == 'y':
+                
+                # Wait for valid input without re-rendering the whole board
+                action = None
+                while True:
+                    key = get_key()
+                    if key:
+                        key = key.lower()
+                        if key == 'y':
+                            action = 'y'
+                            break
+                        elif key == 'a':
+                            action = 'a'
+                            break
+                        elif key == 'n':
+                            action = 'n'
+                            break
+                
+                if action == 'y':
                     tl = self.board.time_limit
                     inc = self.board.increment
+                    from board import ChessBoard
                     self.board = ChessBoard()
                     self.board.set_timer(tl, inc)
                     self.cursor = [7, 4]
@@ -1013,8 +1061,13 @@ class SinglePlayerGame(InteractiveGame):
                     self.selected = None
                     self.legal = []
                     self.message = "New game started!"
+                    game_over_processed = False
                     continue
-                break
+                elif action == 'a':
+                    self._run_analysis()
+                    break
+                elif action == 'n':
+                    break
 
             if self.board.current_turn != self.player_color:
                 self.message = "Computer is thinking..."
@@ -1089,3 +1142,68 @@ class SinglePlayerGame(InteractiveGame):
                 self.board.winner = ('black'
                     if self.board.current_turn == 'white' else 'white')
                 self.board.game_over_reason = 'resignation'
+
+    def _run_analysis(self):
+        print('\033[H\033[J')
+        print(f"  {BOLD}POST-GAME ANALYSIS{RESET}")
+        print("  Analyzing game... This may take a minute depending on game length.")
+        
+        try:
+            from analysis import GameAnalyzer
+            analyzer = GameAnalyzer(depth=2)  # depth 2 is fast enough for terminal UI
+            report = analyzer.analyze_game(self.board, self.player_color)
+            
+            if not report:
+                print("  Not enough moves to analyze.")
+                import time; time.sleep(2)
+                return
+                
+            print('\033[H\033[J')
+            print('\n')
+            print('  ╔═══════════════════════════════════╗')
+            print('  ║       POST-GAME ANALYSIS          ║')
+            print('  ╠═══════════════════════════════════╣')
+            print(f'  ║  Accuracy: {report["accuracy"]:>19.1f}%  ║')
+            print('  ╠═══════════════════════════════════╣')
+            for k, v in report['counts'].items():
+                print(f'  ║  {k:<20} {v:>10}  ║')
+            print('  ╚═══════════════════════════════════╝')
+            
+            print("\n  Press any key to see your blunders & mistakes, or [Q] to quit.")
+            key = get_key()
+            if key and key.lower() == 'q': return
+            
+            issues = report['blunders'] + report['mistakes']
+            if not issues:
+                print("\n  You played perfectly! No major mistakes.")
+                get_key()
+                return
+                
+            # Sort by move number
+            issues.sort(key=lambda x: x['move_num'])
+            
+            for issue in issues:
+                print('\033[H\033[J')
+                print('\n')
+                print('  ╔═══════════════════════════════════╗')
+                print('  ║        MOVE REVIEW                ║')
+                print('  ╠═══════════════════════════════════╣')
+                
+                m = f"Move {issue['move_num']}: {issue['notation']}"
+                print(f'  ║  {m:<31}  ║')
+                print('  ║                                   ║')
+                
+                c = issue['classification']
+                print(f'  ║  Classification: {c:>15}  ║')
+                
+                cp = str(issue['cp_loss'])
+                print(f'  ║  Centipawn loss: {cp:>15}  ║')
+                print('  ╚═══════════════════════════════════╝')
+                
+                print("\n  Press any key for next move, or [Q] to quit...")
+                key = get_key()
+                if key and key.lower() == 'q': break
+                
+        except Exception as e:
+            print(f"  Error during analysis: {e}")
+            import time; time.sleep(2)

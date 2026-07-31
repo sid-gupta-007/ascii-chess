@@ -70,7 +70,7 @@ def main():
             print('  Please enter 1, 2, 3, or 4!')
 
     print()
-    print('  Thanks for playing! Now go crush that teacher! ;)')
+    print('  Thanks for playing! Now go crush that one! ;)')
     print()
 
 
@@ -105,29 +105,50 @@ def _start_single_player():
     tc = _get_time_control()
     if tc is None: return
     time_limit, increment = tc
-    
+
     print()
     print('  ╔═══════════════════════════════════════════════════╗')
     print('  ║           SINGLE PLAYER (VS AI)                   ║')
     print('  ╠═══════════════════════════════════════════════════╣')
     print('  ║                                                   ║')
-    print('  ║   Select AI Difficulty:                           ║')
-    print('  ║     [1] Beginner (Depth 1)                        ║')
-    print('  ║     [2] Intermediate (Depth 2)                    ║')
-    print('  ║     [3] Advanced (Depth 3 - Slow)                 ║')
+    print('  ║   Choose your opponent:                           ║')
+    print('  ║                                                   ║')
+    print('  ║   PERSONALITIES:                                  ║')
+    print('  ║     [1] The Attacker - Aggressive, sacrifices     ║')
+    print('  ║     [2] The Wall     - Ultra-defensive            ║')
+    print('  ║     [3] The Gambler  - Unpredictable chaos        ║')
+    print('  ║     [4] The Grinder  - Trades & squeezes          ║')
+    print('  ║     [5] The Scholar  - Theory nerd                ║')
+    print('  ║                                                   ║')
+    print('  ║   DIFFICULTY LEVELS:                              ║')
+    print('  ║     [6] Easy      (Beginner)                      ║')
+    print('  ║     [7] Medium    (Intermediate)                  ║')
+    print('  ║     [8] Hard      (Advanced)                      ║')
     print('  ║                                                   ║')
     print('  ╚═══════════════════════════════════════════════════╝')
     print()
+
+    personality_map = {
+        '1': 'attacker', '2': 'wall', '3': 'gambler',
+        '4': 'grinder', '5': 'scholar',
+    }
+    level_map = {'6': 1, '7': 2, '8': 3}
+    personality = None
+    level = 2
+
     while True:
         try:
-            level = input('  Choose level (1, 2, or 3): ').strip()
+            ai_choice = input('  Choose opponent (1-8): ').strip()
         except (EOFError, KeyboardInterrupt):
             return
-        if level in ('1', '2', '3'):
+        if ai_choice in personality_map:
+            personality = personality_map[ai_choice]
             break
-        print('  Please enter 1, 2, or 3!')
-        
-    level = int(level)
+        elif ai_choice in level_map:
+            level = level_map[ai_choice]
+            break
+        print('  Please enter a number from 1 to 8!')
+
     print()
     print('  ╔═══════════════════════════════════════════════════╗')
     print('  ║   What color do you want to play as?              ║')
@@ -143,10 +164,19 @@ def _start_single_player():
         if color_choice in ('W', 'B'):
             break
         print('  Please enter W or B!')
-    
+
     player_color = 'white' if color_choice == 'W' else 'black'
-    print(f"  Starting game... You are {player_color.upper()} against Level {level} AI.")
-    SinglePlayerGame(player_color=player_color, level=level, time_limit=time_limit, increment=increment).run()
+    if personality:
+        from engine import PERSONALITIES
+        name = PERSONALITIES[personality]['name']
+        print(f"  Starting game... You are {player_color.upper()} vs {name}")
+    else:
+        print(f"  Starting game... You are {player_color.upper()} vs Level {level} AI.")
+    SinglePlayerGame(
+        player_color=player_color, level=level,
+        time_limit=time_limit, increment=increment,
+        personality=personality,
+    ).run()
 
 
 def _get_server_uri():
