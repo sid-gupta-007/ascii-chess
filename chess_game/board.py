@@ -1,4 +1,4 @@
-from .utils import square_name
+from utils import square_name
 
 class ChessBoard:
     """

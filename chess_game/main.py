@@ -1,7 +1,7 @@
 import sys
 import os
-from .utils import clear_screen
-from .ui import InteractiveGame, ClassicGame
+from utils import clear_screen
+from ui import InteractiveGame, ClassicGame
 
 # ═══════════════════════════════════════════════
 #  Server Configuration
@@ -223,3 +223,10 @@ def _start_online():
     else:
         print("  Invalid choice.")
         client.stop()
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        sys.exit(0)

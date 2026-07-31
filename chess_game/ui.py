@@ -1,7 +1,7 @@
 import sys
-from .constants import *
-from .utils import get_key, clear_screen, square_name, PIECE_NAME, parse_square
-from .board import ChessBoard
+from constants import *
+from utils import get_key, clear_screen, square_name, PIECE_NAME, parse_square
+from board import ChessBoard
 
 class InteractiveGame:
     """
