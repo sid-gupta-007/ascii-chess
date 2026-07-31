@@ -56,7 +56,7 @@ class GameAnalyzer:
                 _, expected_score = self.engine._search_root(sim_board, self.engine.depth, self.engine._get_all_moves(sim_board), current_turn == 'white')
                 
                 # Make the move
-                sim_board.make_move(sr, sc, er, ec, promo)
+                sim_board.make_move(sr, sc, er, ec, promo, check_end=False)
                 
                 # 2. Evaluate the position AFTER the move
                 # If it's white's turn (after black played), the score is from white's perspective
@@ -91,7 +91,7 @@ class GameAnalyzer:
                 })
             else:
                 # Computer's move, just apply it
-                sim_board.make_move(sr, sc, er, ec, promo)
+                sim_board.make_move(sr, sc, er, ec, promo, check_end=False)
 
         return self._generate_report(results)
 

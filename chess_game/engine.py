@@ -472,7 +472,7 @@ class AIEngine:
         for sr, sc, er, ec in ordered:
             promo = self._get_promo(board, sr, sc, er, ec)
             sim = board.clone()
-            sim.make_move(sr, sc, er, ec, promo)
+            sim.make_move(sr, sc, er, ec, promo, check_end=False)
 
             # Check extension: if this move gives check, search 1 deeper
             extension = 1 if sim.is_in_check(sim.current_turn) else 0
@@ -549,7 +549,7 @@ class AIEngine:
         for sr, sc, er, ec in ordered:
             promo = self._get_promo(board, sr, sc, er, ec)
             sim = board.clone()
-            sim.make_move(sr, sc, er, ec, promo)
+            sim.make_move(sr, sc, er, ec, promo, check_end=False)
 
             # Check extension
             extension = 1 if sim.is_in_check(sim.current_turn) else 0
@@ -619,7 +619,7 @@ class AIEngine:
         for sr, sc, er, ec in captures:
             promo = self._get_promo(board, sr, sc, er, ec)
             sim = board.clone()
-            sim.make_move(sr, sc, er, ec, promo)
+            sim.make_move(sr, sc, er, ec, promo, check_end=False)
 
             score = self._quiescence(sim, alpha, beta, not maximizing)
 
@@ -993,4 +993,4 @@ class AIEngine:
                     self.memory.record_bad_position(h, penalty_cp=penalty)
                     
             sr, sc, er, ec, promo = move
-            sim_board.make_move(sr, sc, er, ec, promo)
+            sim_board.make_move(sr, sc, er, ec, promo, check_end=False)

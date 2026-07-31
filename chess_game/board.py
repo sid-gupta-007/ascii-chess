@@ -339,7 +339,7 @@ class ChessBoard:
 
     # ── Execute a Move ────────────────────────
 
-    def make_move(self, fr, fc, tr, tc, promo=None):
+    def make_move(self, fr, fc, tr, tc, promo=None, check_end=True):
         """
         Execute a move. Returns (success: bool, error_msg: str).
         promo should be 'Q','R','B', or 'N' for pawn promotion.
@@ -428,20 +428,22 @@ class ChessBoard:
 
         # ── Check end conditions ──
         enemy = 'black' if col == 'white' else 'white'
-        in_check = self.is_in_check(enemy)
-        has_moves = self.has_any_legal_moves(enemy)
+        
+        if check_end:
+            in_check = self.is_in_check(enemy)
+            has_moves = self.has_any_legal_moves(enemy)
 
-        if in_check and not has_moves:
-            notation += "#"
-            self.game_over = True
-            self.winner = col
-            self.game_over_reason = 'checkmate'
-        elif in_check:
-            notation += "+"
-        elif not has_moves:
-            self.game_over = True
-            self.winner = None
-            self.game_over_reason = 'stalemate'
+            if in_check and not has_moves:
+                notation += "#"
+                self.game_over = True
+                self.winner = col
+                self.game_over_reason = 'checkmate'
+            elif in_check:
+                notation += "+"
+            elif not has_moves:
+                self.game_over = True
+                self.winner = None
+                self.game_over_reason = 'stalemate'
 
         if self.halfmove >= 100:
             self.game_over = True
