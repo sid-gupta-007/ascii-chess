@@ -22,7 +22,58 @@ class ChessBoard:
         self.game_over = False
         self.winner = None        # 'white', 'black', or None (draw)
         self.game_over_reason = ''
+        self.last_move_coords = None
+
+        # Timers
+        self.time_limit = None
+        self.increment = 0
+        self.white_time = None
+        self.black_time = None
+        self.last_tick = None
+        
         self._setup()
+
+    def set_timer(self, time_limit, increment):
+        self.time_limit = time_limit
+        self.increment = increment
+        if time_limit is not None:
+            self.white_time = float(time_limit)
+            self.black_time = float(time_limit)
+        else:
+            self.white_time = None
+            self.black_time = None
+
+    def update_timer(self):
+        if self.time_limit is None or self.game_over:
+            return
+            
+        # Don't start the clock until the first move is made
+        if not self.move_history:
+            return
+        
+        import time
+        now = time.time()
+        if self.last_tick is None:
+            self.last_tick = now
+            return
+            
+        elapsed = now - self.last_tick
+        self.last_tick = now
+        
+        if self.current_turn == 'white':
+            self.white_time -= elapsed
+            if self.white_time <= 0:
+                self.white_time = 0
+                self.game_over = True
+                self.winner = 'black'
+                self.game_over_reason = 'Timeout'
+        else:
+            self.black_time -= elapsed
+            if self.black_time <= 0:
+                self.black_time = 0
+                self.game_over = True
+                self.winner = 'white'
+                self.game_over_reason = 'Timeout'
 
     # ── Initial Position ──────────────────────
 
@@ -335,11 +386,18 @@ class ChessBoard:
         if piece.upper() == 'P' and abs(fr - tr) == 2:
             self.en_passant = ((fr + tr) // 2, fc)
 
-        # ── Update clocks ──
+        # ── Update 50-move clock ──
         if piece.upper() == 'P' or captured:
             self.halfmove = 0
         else:
             self.halfmove += 1
+            
+        # ── Update time controls ──
+        if getattr(self, 'time_limit', None) is not None and getattr(self, 'last_tick', None) is not None:
+            if col == 'white':
+                self.white_time += self.increment
+            else:
+                self.black_time += self.increment
 
         # ── Check end conditions ──
         enemy = 'black' if col == 'white' else 'white'
@@ -370,6 +428,9 @@ class ChessBoard:
         else:
             self.move_history.append(f"{n}...{notation}")
             self.fullmove += 1
+
+        self.last_move_coords = ((fr, fc), (tr, tc))
+
 
         self.current_turn = enemy
         return True, ""

@@ -11,8 +11,9 @@ class InteractiveGame:
     is selected.
     """
 
-    def __init__(self):
+    def __init__(self, time_limit=None, increment=0):
         self.board = ChessBoard()
+        self.board.set_timer(time_limit, increment)
         self.cursor = [7, 4]      # row, col — start at e1
         self.selected = None      # (row, col) of selected piece
         self.legal = []           # list of (row, col) legal targets
@@ -35,13 +36,17 @@ class InteractiveGame:
 
     def _loop(self):
         while True:
+            self.board.update_timer()
             self._render()
 
             if self.board.game_over:
                 self._render_game_over()
                 key = get_key()
                 if key and key.lower() == 'y':
+                    tl = self.board.time_limit
+                    inc = self.board.increment
                     self.board = ChessBoard()
+                    self.board.set_timer(tl, inc)
                     self.cursor = [7, 4]
                     self.selected = None
                     self.legal = []
@@ -49,7 +54,7 @@ class InteractiveGame:
                     continue
                 break
 
-            key = get_key()
+            key = get_key(timeout=0.1)
             if key is None:
                 continue
 
@@ -69,11 +74,17 @@ class InteractiveGame:
                 self.message = ""
 
             elif key == 'LEFT':
-                self.cursor[1] = max(0, self.cursor[1] - 1)
+                if self.flipped:
+                    self.cursor[1] = min(7, self.cursor[1] + 1)
+                else:
+                    self.cursor[1] = max(0, self.cursor[1] - 1)
                 self.message = ""
 
             elif key == 'RIGHT':
-                self.cursor[1] = min(7, self.cursor[1] + 1)
+                if self.flipped:
+                    self.cursor[1] = max(0, self.cursor[1] - 1)
+                else:
+                    self.cursor[1] = min(7, self.cursor[1] + 1)
                 self.message = ""
 
             # ── Select / Move ──
@@ -215,7 +226,8 @@ class InteractiveGame:
 
     def _render(self):
         """Build and display the full game screen.
-        Uses in-place overwrite (no screen clear) for flicker-free rendering."""
+        Uses in-place overwrite (no screen clear) for flicker-free rendering.
+        IMPORTANT: Always outputs a fixed number of lines so the frame never shifts."""
         # Find king-in-check position for highlighting
         self._king_in_check_pos = None
         if self.board.is_in_check(self.board.current_turn):
@@ -227,23 +239,24 @@ class InteractiveGame:
         buf = []
         buf.append('\033[H')  # Move cursor home (NO screen clear = no flicker)
 
-        # ── Title ──
-        buf.append(f'\n{CLR}')
-        buf.append(f'  ╔═══════════════════════════════════════════╗{CLR}\n')
-        buf.append(f'  ║          A S C I I   C H E S S           ║{CLR}\n')
-        buf.append(f'  ║            Interactive Mode               ║{CLR}\n')
-        buf.append(f'  ╚═══════════════════════════════════════════╝{CLR}\n')
-        buf.append(f'{CLR}\n')
-
-        # ── Turn Indicator ──
+        # Line 1: Turn indicator
         turn = self.board.current_turn.upper()
         if self.board.current_turn == 'white':
             buf.append(f'  {BOLD}{FG_CYAN}>>> {turn}\'s turn <<<{RESET}{CLR}\n')
         else:
             buf.append(f'  {BOLD}{FG_RED}>>> {turn}\'s turn <<<{RESET}{CLR}\n')
-        buf.append(f'{CLR}\n')
 
-        # ── Board ──
+        # Line 2: Clocks (or blank)
+        if getattr(self.board, 'time_limit', None) is not None:
+            w_time = max(0.0, self.board.white_time)
+            b_time = max(0.0, self.board.black_time)
+            w_min, w_sec = int(w_time // 60), w_time % 60
+            b_min, b_sec = int(b_time // 60), b_time % 60
+            buf.append(f'  [ White: {w_min:02d}:{w_sec:04.1f}  |  Black: {b_min:02d}:{b_sec:04.1f} ]{CLR}\n')
+        else:
+            buf.append(f'{CLR}\n')
+
+        # Lines 3-21: Board (file labels + separator + 8*(rank+sep) + file labels = 19 lines)
         if self.flipped:
             row_order = range(7, -1, -1)
             col_order = range(7, -1, -1)
@@ -267,76 +280,78 @@ class InteractiveGame:
             buf.append(f'      +---+---+---+---+---+---+---+---+{CLR}\n')
 
         buf.append(f'{file_labels}{CLR}\n')
-        buf.append(f'{CLR}\n')
 
-        # ── Legend ──
-        buf.append(f'  Highlights:  ')
-        buf.append(f'{REVERSE}{BOLD}[X]{RESET}=Cursor  ')
-        buf.append(f'{BG_YELLOW}{FG_BLACK}{BOLD} X {RESET}=Selected  ')
-        buf.append(f'{BG_GREEN}{FG_BLACK}{BOLD} + {RESET}=Can move  ')
-        buf.append(f'{BG_RED}{FG_WHITE}{BOLD} x {RESET}=Capture{CLR}\n')
-        buf.append(f'  Pieces:  UPPERCASE = White    lowercase = black{CLR}\n')
-        buf.append(f'{CLR}\n')
+        # Line 22: Legend
+        buf.append(
+            f'  {REVERSE}{BOLD}[X]{RESET}=Cursor '
+            f'{BG_YELLOW}{FG_BLACK}{BOLD} X {RESET}=Select '
+            f'{BG_GREEN}{FG_BLACK}{BOLD} + {RESET}=Move '
+            f'{BG_RED}{FG_WHITE}{BOLD} x {RESET}=Capture '
+            f'{BG_CYAN}{FG_BLACK}   {RESET}=Last{CLR}\n'
+        )
 
-        # ── Check / Checkmate Warning ──
+        # Line 23: Check warning / message (ALWAYS exactly 1 line)
         if self._king_in_check_pos:
             if self.board.game_over and self.board.game_over_reason == 'checkmate':
                 buf.append(
                     f'  {BOLD}{BG_RED}{FG_WHITE}'
                     f' !!  CHECKMATE  !! {RESET}'
-                    f'  {FG_RED}{BOLD}King is trapped!{RESET}{CLR}\n{CLR}\n'
+                    f'  {FG_RED}{BOLD}King is trapped!{RESET}{CLR}\n'
                 )
             else:
                 buf.append(
                     f'  {BOLD}{BG_RED}{FG_WHITE}'
                     f' !! CHECK !! {RESET}'
-                    f'  {FG_RED}{BOLD}Your King is under attack!{RESET}{CLR}\n{CLR}\n'
+                    f'  {FG_RED}{BOLD}Your King is under attack!{RESET}{CLR}\n'
                 )
-
-        # ── Message ──
-        if self.message:
+        elif self.message:
             buf.append(f'  {self.message}{CLR}\n')
-        buf.append(f'{CLR}\n')
+        else:
+            buf.append(f'{CLR}\n')
 
-        # ── Status Bar ──
+        # Line 24: Cursor info + selected info
         csq = square_name(self.cursor[0], self.cursor[1])
         cp  = self.board.get(self.cursor[0], self.cursor[1])
         if cp:
             cursor_info = f"{PIECE_NAME[cp.upper()]}({cp}) at {csq}"
         else:
             cursor_info = f"Empty at {csq}"
-        buf.append(f'  Cursor: {BOLD}{cursor_info}{RESET}')
+        status_line = f'  Cursor: {BOLD}{cursor_info}{RESET}'
 
         if self.selected:
             ssq = square_name(self.selected[0], self.selected[1])
             sp  = self.board.get(self.selected[0], self.selected[1])
             if sp:
-                buf.append(
-                    f'    |    Selected: '
+                status_line += (
+                    f'  |  Selected: '
                     f'{BOLD}{FG_YELLOW}'
                     f'{PIECE_NAME[sp.upper()]}({sp}) at {ssq}'
                     f'{RESET}'
                 )
-        buf.append(f'{CLR}\n{CLR}\n')
+        buf.append(f'{status_line}{CLR}\n')
 
-        # ── Controls ──
+        # Line 25: Controls row 1
         buf.append(
-            f'  {FG_GRAY}[Arrows] Navigate   '
-            f'[Enter] Select/Move   '
-            f'[Backspace/Del] Deselect{RESET}{CLR}\n'
+            f'  {FG_GRAY}[Arrows] Navigate  '
+            f'[Enter] Select/Move  '
+            f'[Bksp] Deselect{RESET}{CLR}\n'
         )
+
+        # Line 26: Controls row 2
         buf.append(
-            f'  {FG_GRAY}[H] Help   '
-            f'[M] Move History   '
-            f'[F] Flip Board   '
-            f'[R] Resign   '
+            f'  {FG_GRAY}[H] Help  '
+            f'[M] Moves  '
+            f'[F] Flip  '
+            f'[R] Resign  '
             f'[Q] Quit{RESET}{CLR}\n'
         )
 
-        # ── Last Move ──
+        # Line 27: Last move (or blank) — ALWAYS exactly 1 line
         if self.board.move_history:
             last = self.board.move_history[-1]
-            buf.append(f'{CLR}\n  Last move: {BOLD}{last}{RESET}{CLR}\n')
+            buf.append(f'  Last move: {BOLD}{last}{RESET}{CLR}\n')
+        else:
+            buf.append(f'{CLR}\n')
 
         # Clear any remaining lines below from previous renders
         buf.append('\033[J')
@@ -372,6 +387,12 @@ class InteractiveGame:
             self._king_in_check_pos is not None and
             row == self._king_in_check_pos[0] and
             col == self._king_in_check_pos[1]
+        )
+
+        is_last_move = (
+            getattr(self.board, 'last_move_coords', None) is not None and
+            ((row, col) == self.board.last_move_coords[0] or 
+             (row, col) == self.board.last_move_coords[1])
         )
 
         # ── Build the 3-char cell content ──
@@ -424,6 +445,9 @@ class InteractiveGame:
 
         if is_legal:
             return f'{BG_GREEN}{FG_BLACK}{BOLD}{content}{RESET}'
+
+        if is_last_move:
+            return f'{BG_CYAN}{FG_BLACK}{content}{RESET}'
 
         # ── Normal (no highlight) — apply board square colors ──
         sq_bg = BG_LIGHT_SQ if is_light else BG_DARK_SQ
@@ -762,8 +786,8 @@ class ClassicGame:
 # ═══════════════════════════════════════════════
 
 class OnlineGame(InteractiveGame):
-    def __init__(self, network_client, room_code, my_color):
-        super().__init__()
+    def __init__(self, network_client, room_code, my_color, time_limit=None, increment=0):
+        super().__init__(time_limit, increment)
         self.network = network_client
         self.room_code = room_code
         self.my_color = my_color  # 'white' or 'black'
@@ -791,6 +815,7 @@ class OnlineGame(InteractiveGame):
                     self.message = f"Network Error: {msg.get('message')}"
 
             # Force redraw
+            self.board.update_timer()
             self._render()
 
             if self.board.game_over or self.opponent_disconnected:
@@ -822,10 +847,16 @@ class OnlineGame(InteractiveGame):
                     self.cursor[0] = min(7, self.cursor[0] + 1)
                 self.message = ""
             elif key == 'LEFT':
-                self.cursor[1] = max(0, self.cursor[1] - 1)
+                if self.flipped:
+                    self.cursor[1] = min(7, self.cursor[1] + 1)
+                else:
+                    self.cursor[1] = max(0, self.cursor[1] - 1)
                 self.message = ""
             elif key == 'RIGHT':
-                self.cursor[1] = min(7, self.cursor[1] + 1)
+                if self.flipped:
+                    self.cursor[1] = max(0, self.cursor[1] - 1)
+                else:
+                    self.cursor[1] = min(7, self.cursor[1] + 1)
                 self.message = ""
 
             # ── Select / Move ──
@@ -950,3 +981,111 @@ class OnlineGame(InteractiveGame):
 #  MAIN  —  Mode Selection + Entry Point
 # ═══════════════════════════════════════════════
 
+
+class SinglePlayerGame(InteractiveGame):
+    def __init__(self, player_color='white', level=2, time_limit=None, increment=0):
+        super().__init__(time_limit, increment)
+        self.player_color = player_color
+        self.computer_move_msg = ""  # Persistent computer move display
+        if player_color == 'black':
+            self.flipped = True
+            self.cursor = [0, 4]  # start at e8 instead of e1
+        
+        from engine import AIEngine
+        self.engine = AIEngine(depth=level)
+
+    def _loop(self):
+        while True:
+            self.board.update_timer()
+            self._render()
+
+            if self.board.game_over:
+                self._render_game_over()
+                key = get_key()
+                if key and key.lower() == 'y':
+                    tl = self.board.time_limit
+                    inc = self.board.increment
+                    self.board = ChessBoard()
+                    self.board.set_timer(tl, inc)
+                    self.cursor = [7, 4]
+                    if self.player_color == 'black':
+                        self.cursor = [0, 4]
+                    self.selected = None
+                    self.legal = []
+                    self.message = "New game started!"
+                    continue
+                break
+
+            if self.board.current_turn != self.player_color:
+                self.message = "Computer is thinking..."
+                self._render()
+                move = self.engine.get_best_move(self.board)
+                if move:
+                    sr, sc, er, ec, promo = move
+                    self.board.make_move(sr, sc, er, ec, promo)
+                    last = self.board.move_history[-1]
+                    self.computer_move_msg = f"Computer played: {last}"
+                    self.message = self.computer_move_msg
+                continue
+
+            key = get_key(timeout=0.1)
+            if key is None:
+                continue
+
+            # ── Navigation ──
+            if key == 'UP':
+                if self.flipped:
+                    self.cursor[0] = min(7, self.cursor[0] + 1)
+                else:
+                    self.cursor[0] = max(0, self.cursor[0] - 1)
+                self.message = self.computer_move_msg
+
+            elif key == 'DOWN':
+                if self.flipped:
+                    self.cursor[0] = max(0, self.cursor[0] - 1)
+                else:
+                    self.cursor[0] = min(7, self.cursor[0] + 1)
+                self.message = self.computer_move_msg
+
+            elif key == 'LEFT':
+                if self.flipped:
+                    self.cursor[1] = min(7, self.cursor[1] + 1)
+                else:
+                    self.cursor[1] = max(0, self.cursor[1] - 1)
+                self.message = self.computer_move_msg
+
+            elif key == 'RIGHT':
+                if self.flipped:
+                    self.cursor[1] = max(0, self.cursor[1] - 1)
+                else:
+                    self.cursor[1] = min(7, self.cursor[1] + 1)
+                self.message = self.computer_move_msg
+
+            # ── Select / Move ──
+            elif key == 'ENTER':
+                self._handle_enter()
+
+            # ── Deselect ──
+            elif key in ('BACKSPACE', 'DELETE', 'ESC'):
+                if self.selected:
+                    self.selected = None
+                    self.legal = []
+                    self.message = "Deselected."
+                else:
+                    self.message = ""
+
+            # ── Commands ──
+            elif key.lower() == 'q':
+                break
+            elif key.lower() == 'h':
+                self._show_help()
+            elif key.lower() == 'm':
+                self._show_moves()
+            elif key.lower() == 'f':
+                self.flipped = not self.flipped
+                self.message = "Board flipped!"
+            elif key.lower() == 'r':
+                self.board.game_over = True
+                self.board.winner = ('black'
+                    if self.board.current_turn == 'white' else 'white')
+                self.board.game_over_reason = 'resignation'
