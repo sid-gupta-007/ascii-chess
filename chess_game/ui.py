@@ -1027,6 +1027,12 @@ class SinglePlayerGame(InteractiveGame):
                             
                         # Use 50% as a baseline accuracy if we don't analyze
                         profile.update_after_game(result, self.level, 50.0)
+                        
+                        # AI Memory: Learn from loss
+                        if result == 'win': # Player won, AI lost
+                            comp_color = 'black' if self.player_color == 'white' else 'white'
+                            self.engine.learn_from_loss(self.board, comp_color)
+                            
                     except ImportError:
                         pass
                     game_over_processed = True

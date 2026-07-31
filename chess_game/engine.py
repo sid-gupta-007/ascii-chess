@@ -960,3 +960,37 @@ class AIEngine:
                               (er, ec) == board.en_passant):
                             captures.append((r, c, er, ec))
         return captures
+
+    def learn_from_loss(self, board, ai_color):
+        """
+        When the AI loses, penalize the last few positions it was in.
+        This forms a persistent memory of fatal traps and mistakes,
+        allowing the AI to avoid them in future games.
+        """
+        if not hasattr(self, 'memory') or not self.memory:
+            try:
+                from player_data import AIMemory
+                self.memory = AIMemory()
+            except ImportError:
+                return
+
+        # Reconstruct the game and penalize the final critical states
+        from board import ChessBoard
+        sim_board = ChessBoard()
+        
+        total_moves = len(board.raw_move_history)
+        
+        for i, move in enumerate(board.raw_move_history):
+            # We only penalize positions where it was the AI's turn to choose a move
+            if sim_board.current_turn == ai_color:
+                moves_until_loss = total_moves - i
+                
+                # If we are within the last 5 full moves (10 half-moves) of the loss
+                if moves_until_loss <= 10:
+                    h = zobrist_hash(sim_board)
+                    # The closer to the loss, the heavier the penalty
+                    penalty = 50 + (10 - moves_until_loss) * 20
+                    self.memory.record_bad_position(h, penalty_cp=penalty)
+                    
+            sr, sc, er, ec, promo = move
+            sim_board.make_move(sr, sc, er, ec, promo)
