@@ -349,7 +349,11 @@ class InteractiveGame:
         # Line 27: Last move (or blank) — ALWAYS exactly 1 line
         if self.board.move_history:
             last = self.board.move_history[-1]
-            buf.append(f'  Last move: {BOLD}{last}{RESET}{CLR}\n')
+            opening = self.board.get_opening_name()
+            if opening:
+                buf.append(f'  Last move: {BOLD}{last}{RESET}   |   {FG_YELLOW}Opening: {opening}{RESET}{CLR}\n')
+            else:
+                buf.append(f'  Last move: {BOLD}{last}{RESET}{CLR}\n')
         else:
             buf.append(f'{CLR}\n')
 
@@ -714,7 +718,11 @@ class ClassicGame:
             print('  *** CHECK! ***')
 
         if self.board.move_history:
-            print(f'\n  Last move: {self.board.move_history[-1]}')
+            last_move_text = f'\n  Last move: {self.board.move_history[-1]}'
+            opening = self.board.get_opening_name()
+            if opening:
+                last_move_text += f'   |   Opening: {opening}'
+            print(last_move_text)
 
         if self.message:
             print(f'\n  {self.message}')

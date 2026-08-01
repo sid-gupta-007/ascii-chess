@@ -39,8 +39,7 @@ def main():
     print('  ║          Just navigate, select, and move!         ║')
     print('  ║                                                   ║')
     print('  ║     [3]  Online Multiplayer                       ║')
-    print('  ║          Play with a friend over the internet!    ║')
-    print('  ║                                                   ║')
+    print('  ║          (Currently in DEV phase - Blocked)       ║')
     print('  ║     [4]  Single Player (vs Computer)              ║')
     print('  ║          Play offline against the built-in AI!    ║')
     print('  ║                                                   ║')
@@ -62,8 +61,8 @@ def main():
                 InteractiveGame(time_limit=tc[0], increment=tc[1]).run()
             break
         elif choice == '3':
-            _start_online()
-            break
+            print('\n  Online mode is currently in development. Please select another mode.\n')
+            continue
         elif choice == '4':
             _start_single_player()
             break

@@ -1,5 +1,32 @@
 from utils import square_name
 
+OPENING_NAMES = {
+    ((6, 4, 4, 4),): "King's Pawn Game",
+    ((6, 3, 4, 3),): "Queen's Pawn Game",
+    ((6, 2, 4, 2),): "English Opening",
+    ((7, 6, 5, 5),): "Reti Opening",
+    ((6, 4, 4, 4), (1, 4, 3, 4)): "Open Game",
+    ((6, 4, 4, 4), (1, 2, 3, 2)): "Sicilian Defense",
+    ((6, 4, 4, 4), (1, 4, 2, 4)): "French Defense",
+    ((6, 4, 4, 4), (1, 2, 2, 2)): "Caro-Kann Defense",
+    ((6, 4, 4, 4), (1, 4, 3, 4), (7, 6, 5, 5)): "King's Knight Opening",
+    ((6, 4, 4, 4), (1, 4, 3, 4), (7, 6, 5, 5), (0, 1, 2, 2)): "King's Knight Opening",
+    ((6, 4, 4, 4), (1, 4, 3, 4), (7, 6, 5, 5), (0, 1, 2, 2), (7, 5, 4, 2)): "Italian Game",
+    ((6, 4, 4, 4), (1, 4, 3, 4), (7, 6, 5, 5), (0, 1, 2, 2), (7, 5, 3, 1)): "Ruy Lopez",
+    ((6, 4, 4, 4), (1, 4, 3, 4), (7, 6, 5, 5), (0, 1, 2, 2), (6, 3, 4, 3)): "Scotch Game",
+    ((6, 4, 4, 4), (1, 2, 3, 2), (7, 6, 5, 5)): "Sicilian Defense",
+    ((6, 4, 4, 4), (1, 2, 3, 2), (7, 6, 5, 5), (1, 3, 2, 3)): "Sicilian Defense",
+    ((6, 4, 4, 4), (1, 2, 3, 2), (7, 6, 5, 5), (0, 1, 2, 2)): "Sicilian Defense",
+    ((6, 3, 4, 3), (1, 3, 3, 3)): "Closed Game",
+    ((6, 3, 4, 3), (0, 6, 2, 5)): "Indian Defense",
+    ((6, 3, 4, 3), (1, 3, 3, 3), (6, 2, 4, 2)): "Queen's Gambit",
+    ((6, 3, 4, 3), (1, 3, 3, 3), (7, 2, 4, 5)): "London System",
+    ((6, 3, 4, 3), (0, 6, 2, 5), (6, 2, 4, 2)): "Indian Defense",
+    ((6, 3, 4, 3), (0, 6, 2, 5), (6, 2, 4, 2), (1, 6, 2, 6)): "King's Indian Defense",
+    ((6, 3, 4, 3), (0, 6, 2, 5), (6, 2, 4, 2), (1, 4, 2, 4)): "Nimzo/QGD Setup",
+    ((6, 3, 4, 3), (1, 3, 3, 3), (6, 2, 4, 2), (1, 4, 2, 4)): "Queen's Gambit Declined",
+    ((6, 3, 4, 3), (1, 3, 3, 3), (6, 2, 4, 2), (3, 3, 4, 2)): "Queen's Gambit Accepted",
+}
 class ChessBoard:
     """
     Full chess rules engine.
@@ -470,6 +497,15 @@ class ChessBoard:
             return f"{chr(fc + ord('a'))}x{to_sq}" if captured else to_sq
         cap = 'x' if captured else '-'
         return f"{piece.upper()}{cap}{to_sq}"
+
+    def get_opening_name(self):
+        """Determine the opening name from the move history."""
+        coords_history = tuple((m[0], m[1], m[2], m[3]) for m in self.raw_move_history)
+        for length in range(len(coords_history), 0, -1):
+            prefix = coords_history[:length]
+            if prefix in OPENING_NAMES:
+                return OPENING_NAMES[prefix]
+        return None
 
 
 # ═══════════════════════════════════════════════
