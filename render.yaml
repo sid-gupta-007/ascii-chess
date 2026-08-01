@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ascii-chess-relay
+    runtime: python
+    buildCommand: pip install websockets
+    startCommand: python server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"

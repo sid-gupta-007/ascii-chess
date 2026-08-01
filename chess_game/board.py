@@ -1,4 +1,4 @@
-from .utils import square_name
+from utils import square_name
 
 class ChessBoard:
     """
@@ -12,6 +12,7 @@ class ChessBoard:
         self.board = [[None]*8 for _ in range(8)]
         self.current_turn = 'white'
         self.move_history = []
+        self.raw_move_history = []
         self.castling = {
             'K': True, 'Q': True,   # white kingside / queenside
             'k': True, 'q': True,   # black kingside / queenside
@@ -20,9 +21,84 @@ class ChessBoard:
         self.halfmove = 0
         self.fullmove = 1
         self.game_over = False
-        self.winner = None        # 'white', 'black', or None (draw)
+        self.winner = None
         self.game_over_reason = ''
+        self.last_move_coords = None
+
+        # Timers
+        self.time_limit = None
+        self.increment = 0
+        self.white_time = None
+        self.black_time = None
+        self.last_tick = None
+        
         self._setup()
+
+    def clone(self):
+        """Fast clone for search tree, avoiding slow copy.deepcopy."""
+        new_board = ChessBoard.__new__(ChessBoard)
+        new_board.board = [row[:] for row in self.board]
+        new_board.current_turn = self.current_turn
+        new_board.castling = self.castling.copy()
+        new_board.en_passant = self.en_passant
+        new_board.halfmove = self.halfmove
+        new_board.fullmove = self.fullmove
+        new_board.game_over = self.game_over
+        new_board.winner = self.winner
+        new_board.game_over_reason = self.game_over_reason
+        new_board.last_move_coords = self.last_move_coords
+        
+        # We don't need history for search tree copies
+        new_board.move_history = []
+        new_board.raw_move_history = []
+        
+        # Don't clone timer states for search
+        new_board.time_limit = None
+        new_board.last_tick = None
+        
+        return new_board
+
+    def set_timer(self, time_limit, increment):
+        self.time_limit = time_limit
+        self.increment = increment
+        if time_limit is not None:
+            self.white_time = float(time_limit)
+            self.black_time = float(time_limit)
+        else:
+            self.white_time = None
+            self.black_time = None
+
+    def update_timer(self):
+        if self.time_limit is None or self.game_over:
+            return
+            
+        # Don't start the clock until the first move is made
+        if not self.move_history:
+            return
+        
+        import time
+        now = time.time()
+        if self.last_tick is None:
+            self.last_tick = now
+            return
+            
+        elapsed = now - self.last_tick
+        self.last_tick = now
+        
+        if self.current_turn == 'white':
+            self.white_time -= elapsed
+            if self.white_time <= 0:
+                self.white_time = 0
+                self.game_over = True
+                self.winner = 'black'
+                self.game_over_reason = 'Timeout'
+        else:
+            self.black_time -= elapsed
+            if self.black_time <= 0:
+                self.black_time = 0
+                self.game_over = True
+                self.winner = 'white'
+                self.game_over_reason = 'Timeout'
 
     # ── Initial Position ──────────────────────
 
@@ -263,11 +339,13 @@ class ChessBoard:
 
     # ── Execute a Move ────────────────────────
 
-    def make_move(self, fr, fc, tr, tc, promo=None):
+    def make_move(self, fr, fc, tr, tc, promo=None, check_end=True):
         """
         Execute a move. Returns (success: bool, error_msg: str).
         promo should be 'Q','R','B', or 'N' for pawn promotion.
         """
+        self.update_timer()  # Deduct time spent thinking BEFORE switching turns
+        
         piece = self.board[fr][fc]
         if not piece:
             return False, "No piece at that square."
@@ -335,28 +413,37 @@ class ChessBoard:
         if piece.upper() == 'P' and abs(fr - tr) == 2:
             self.en_passant = ((fr + tr) // 2, fc)
 
-        # ── Update clocks ──
+        # ── Update 50-move clock ──
         if piece.upper() == 'P' or captured:
             self.halfmove = 0
         else:
             self.halfmove += 1
+            
+        # ── Update time controls ──
+        if getattr(self, 'time_limit', None) is not None and getattr(self, 'last_tick', None) is not None:
+            if col == 'white':
+                self.white_time += self.increment
+            else:
+                self.black_time += self.increment
 
         # ── Check end conditions ──
         enemy = 'black' if col == 'white' else 'white'
-        in_check = self.is_in_check(enemy)
-        has_moves = self.has_any_legal_moves(enemy)
+        
+        if check_end:
+            in_check = self.is_in_check(enemy)
+            has_moves = self.has_any_legal_moves(enemy)
 
-        if in_check and not has_moves:
-            notation += "#"
-            self.game_over = True
-            self.winner = col
-            self.game_over_reason = 'checkmate'
-        elif in_check:
-            notation += "+"
-        elif not has_moves:
-            self.game_over = True
-            self.winner = None
-            self.game_over_reason = 'stalemate'
+            if in_check and not has_moves:
+                notation += "#"
+                self.game_over = True
+                self.winner = col
+                self.game_over_reason = 'checkmate'
+            elif in_check:
+                notation += "+"
+            elif not has_moves:
+                self.game_over = True
+                self.winner = None
+                self.game_over_reason = 'stalemate'
 
         if self.halfmove >= 100:
             self.game_over = True
@@ -370,6 +457,9 @@ class ChessBoard:
         else:
             self.move_history.append(f"{n}...{notation}")
             self.fullmove += 1
+
+        self.last_move_coords = ((fr, fc), (tr, tc))
+        self.raw_move_history.append((fr, fc, tr, tc, promo))
 
         self.current_turn = enemy
         return True, ""

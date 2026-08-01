@@ -1,29 +1,35 @@
 import sys
 import os
-import tty
-import termios
-import select
 
-from .constants import *
+from constants import *
 
 # ═══════════════════════════════════════════════
 # Cross-Platform Keyboard Input
 # ═══════════════════════════════════════════════
 
-def get_key():
+def get_key(timeout=None):
     """
     Read a single keypress from stdin.
     Returns a string like 'UP', 'DOWN', 'ENTER',
     'BACKSPACE', 'ESC', or the character pressed.
+    If timeout is passed (in seconds) and no key is pressed, returns None.
     Works on Windows (msvcrt) and Unix (termios).
     """
     if os.name == 'nt':
-        return _get_key_windows()
+        return _get_key_windows(timeout)
     else:
-        return _get_key_unix()
+        return _get_key_unix(timeout)
 
-def _get_key_windows():
+def _get_key_windows(timeout=None):
     import msvcrt
+    if timeout is not None:
+        import time
+        start_time = time.time()
+        while not msvcrt.kbhit():
+            if time.time() - start_time > timeout:
+                return None
+            time.sleep(0.01)
+            
     key = msvcrt.getch()
     if key in (b'\xe0', b'\x00'):
         key2 = msvcrt.getch()
@@ -43,22 +49,24 @@ def _get_key_windows():
         return None
 
 
-def _get_key_unix():
+def _get_key_unix(timeout=None):
     import tty, termios, select
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        # IMPORTANT: Use os.read(fd, 1) instead of sys.stdin.read(1)
-        # sys.stdin.read() has Python-level buffering that consumes
-        # ALL available bytes from the OS, so select.select() sees
-        # nothing left and arrow key sequences break.
-        # os.read() reads exactly 1 byte at the OS level.
+        
+        # Timeout logic for first byte
+        if timeout is not None:
+            rlist, _, _ = select.select([fd], [], [], timeout)
+            if not rlist:
+                return None
+                
         ch = os.read(fd, 1).decode('utf-8', errors='ignore')
 
         if ch == '\x1b':
             # Check if more bytes follow (escape sequence vs bare ESC)
-            if select.select([fd], [], [], 0.1)[0]:
+            if select.select([fd], [], [], 0.05)[0]:
                 ch2 = os.read(fd, 1).decode('utf-8', errors='ignore')
                 if ch2 == '[':
                     ch3 = os.read(fd, 1).decode('utf-8', errors='ignore')
@@ -70,19 +78,20 @@ def _get_key_unix():
                         return arrows[ch3]
                     # Handle Delete key: ESC [ 3 ~
                     if ch3 == '3':
-                        os.read(fd, 1)   # consume the '~'
+                        # select to drain ~ so it doesn't block
+                        if select.select([fd], [], [], 0.05)[0]:
+                            os.read(fd, 1)   
                         return 'DELETE'
-                    # Handle other sequences (Home, End, etc.) — ignore
                     return None
                 elif ch2 == 'O':
-                    # Some terminals send ESC O A for arrow keys
-                    ch3 = os.read(fd, 1).decode('utf-8', errors='ignore')
-                    arrows = {
-                        'A': 'UP', 'B': 'DOWN',
-                        'C': 'RIGHT', 'D': 'LEFT',
-                    }
-                    if ch3 in arrows:
-                        return arrows[ch3]
+                    if select.select([fd], [], [], 0.05)[0]:
+                        ch3 = os.read(fd, 1).decode('utf-8', errors='ignore')
+                        arrows = {
+                            'A': 'UP', 'B': 'DOWN',
+                            'C': 'RIGHT', 'D': 'LEFT',
+                        }
+                        if ch3 in arrows:
+                            return arrows[ch3]
                     return None
             return 'ESC'
 
