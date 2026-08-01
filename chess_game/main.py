@@ -22,7 +22,7 @@ def main():
     print('  ║             ░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀▀▀                  ║')
     print('  ║                                                   ║')
     print('  ║          A S C I I   C H E S S                    ║')
-    print('  ║            Terminal Edition v2.0                  ║')
+    print('  ║            Terminal Edition v3.0                  ║')
     print('  ║              Two-Player Game                      ║')
     print('  ║                                                   ║')
     print('  ╠═══════════════════════════════════════════════════╣')

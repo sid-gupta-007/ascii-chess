@@ -24,3 +24,4 @@ venv.bak/
 # Project specific
 # (Add any specific generated temp files here if needed)
 .claude
+*.json
