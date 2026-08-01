@@ -1,7 +1,7 @@
 import sys
 import os
-from .utils import clear_screen
-from .ui import InteractiveGame, ClassicGame
+from utils import clear_screen
+from ui import InteractiveGame, ClassicGame, SinglePlayerGame
 
 # ═══════════════════════════════════════════════
 #  Server Configuration
@@ -37,15 +37,19 @@ def main():
     print('  ║          Use arrow keys + Enter to play           ║')
     print('  ║          Legal moves glow on the board!           ║')
     print('  ║          Just navigate, select, and move!         ║')
+    print('  ║                                                   ║')
     print('  ║     [3]  Online Multiplayer                       ║')
     print('  ║          Play with a friend over the internet!    ║')
+    print('  ║                                                   ║')
+    print('  ║     [4]  Single Player (vs Computer)              ║')
+    print('  ║          Play offline against the built-in AI!    ║')
     print('  ║                                                   ║')
     print('  ╚═══════════════════════════════════════════════════╝')
     print()
 
     while True:
         try:
-            choice = input('  Enter mode (1, 2, or 3): ').strip()
+            choice = input('  Enter mode (1, 2, 3, or 4): ').strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return
@@ -53,17 +57,127 @@ def main():
             ClassicGame().run()
             break
         elif choice == '2':
-            InteractiveGame().run()
+            tc = _get_time_control()
+            if tc is not None:
+                InteractiveGame(time_limit=tc[0], increment=tc[1]).run()
             break
         elif choice == '3':
             _start_online()
             break
+        elif choice == '4':
+            _start_single_player()
+            break
         else:
-            print('  Please enter 1, 2, or 3!')
+            print('  Please enter 1, 2, 3, or 4!')
 
     print()
-    print('  Thanks for playing! Now go crush that teacher! ;)')
+    print('  Thanks for playing! Now go crush that one! ;)')
     print()
+
+
+def _get_time_control():
+    print()
+    print('  ╔═══════════════════════════════════════════════════╗')
+    print('  ║           TIME CONTROL                            ║')
+    print('  ╠═══════════════════════════════════════════════════╣')
+    print('  ║                                                   ║')
+    print('  ║   [1] No Timer (Unlimited)                        ║')
+    print('  ║   [2] Bullet (1|1)  - 1 min + 1s                  ║')
+    print('  ║   [3] Blitz  (3|3)  - 3 min + 3s                  ║')
+    print('  ║   [4] Blitz  (5|5)  - 5 min + 5s                  ║')
+    print('  ║   [5] Rapid  (10|10)- 10 min + 10s                ║')
+    print('  ║                                                   ║')
+    print('  ╚═══════════════════════════════════════════════════╝')
+    print()
+    while True:
+        try:
+            choice = input('  Choose time control (1-5): ').strip()
+        except (EOFError, KeyboardInterrupt):
+            return None
+        if choice == '1': return None, 0
+        if choice == '2': return 60, 1
+        if choice == '3': return 180, 3
+        if choice == '4': return 300, 5
+        if choice == '5': return 600, 10
+        print('  Please enter 1, 2, 3, 4, or 5!')
+
+
+def _start_single_player():
+    tc = _get_time_control()
+    if tc is None: return
+    time_limit, increment = tc
+
+    print()
+    print('  ╔═══════════════════════════════════════════════════╗')
+    print('  ║           SINGLE PLAYER (VS AI)                   ║')
+    print('  ╠═══════════════════════════════════════════════════╣')
+    print('  ║                                                   ║')
+    print('  ║   Choose your opponent:                           ║')
+    print('  ║                                                   ║')
+    print('  ║   PERSONALITIES:                                  ║')
+    print('  ║     [1] The Attacker - Aggressive, sacrifices     ║')
+    print('  ║     [2] The Wall     - Ultra-defensive            ║')
+    print('  ║     [3] The Gambler  - Unpredictable chaos        ║')
+    print('  ║     [4] The Grinder  - Trades & squeezes          ║')
+    print('  ║     [5] The Scholar  - Theory nerd                ║')
+    print('  ║                                                   ║')
+    print('  ║   DIFFICULTY LEVELS:                              ║')
+    print('  ║     [6] Easy      (Beginner)                      ║')
+    print('  ║     [7] Medium    (Intermediate)                  ║')
+    print('  ║     [8] Hard      (Advanced)                      ║')
+    print('  ║                                                   ║')
+    print('  ╚═══════════════════════════════════════════════════╝')
+    print()
+
+    personality_map = {
+        '1': 'attacker', '2': 'wall', '3': 'gambler',
+        '4': 'grinder', '5': 'scholar',
+    }
+    level_map = {'6': 1, '7': 2, '8': 3}
+    personality = None
+    level = 2
+
+    while True:
+        try:
+            ai_choice = input('  Choose opponent (1-8): ').strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if ai_choice in personality_map:
+            personality = personality_map[ai_choice]
+            break
+        elif ai_choice in level_map:
+            level = level_map[ai_choice]
+            break
+        print('  Please enter a number from 1 to 8!')
+
+    print()
+    print('  ╔═══════════════════════════════════════════════════╗')
+    print('  ║   What color do you want to play as?              ║')
+    print('  ║     [W] White                                     ║')
+    print('  ║     [B] Black                                     ║')
+    print('  ╚═══════════════════════════════════════════════════╝')
+    print()
+    while True:
+        try:
+            color_choice = input('  Choose color (W/B): ').strip().upper()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if color_choice in ('W', 'B'):
+            break
+        print('  Please enter W or B!')
+
+    player_color = 'white' if color_choice == 'W' else 'black'
+    if personality:
+        from engine import PERSONALITIES
+        name = PERSONALITIES[personality]['name']
+        print(f"  Starting game... You are {player_color.upper()} vs {name}")
+    else:
+        print(f"  Starting game... You are {player_color.upper()} vs Level {level} AI.")
+    SinglePlayerGame(
+        player_color=player_color, level=level,
+        time_limit=time_limit, increment=increment,
+        personality=personality,
+    ).run()
 
 
 def _get_server_uri():
@@ -123,8 +237,8 @@ def _get_server_uri():
 
 def _start_online():
     """Handle the online multiplayer flow."""
-    from .ui import OnlineGame
-    from .network import NetworkClient
+    from ui import OnlineGame
+    from network import NetworkClient
     import time
 
     # ── Choose server ──
@@ -138,6 +252,10 @@ def _start_online():
         net_choice = input("  Choice: ").strip()
     except (EOFError, KeyboardInterrupt):
         return
+
+    tc = _get_time_control()
+    if tc is None: return
+    time_limit, increment = tc
 
     print(f"\n  Connecting to {server_uri}...")
     client = NetworkClient(uri=server_uri)
@@ -191,7 +309,9 @@ def _start_online():
                 break
             time.sleep(0.1)
 
-        OnlineGame(client, room_code, my_color='white').run()
+        print("\n  ⚠️ NOTE: Please ensure both players selected the same time control!")
+        time.sleep(1)
+        OnlineGame(client, room_code, my_color='white', time_limit=time_limit, increment=increment).run()
 
     elif net_choice == '2':
         try:
@@ -218,8 +338,16 @@ def _start_online():
             time.sleep(0.1)
 
         print(f"  ✓ Joined! You play as {my_color.upper()}.")
-        time.sleep(1)
-        OnlineGame(client, code, my_color).run()
+        print("  ⚠️ NOTE: Please ensure both players selected the same time control!")
+        time.sleep(2)
+        OnlineGame(client, code, my_color, time_limit=time_limit, increment=increment).run()
     else:
         print("  Invalid choice.")
         client.stop()
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        sys.exit(0)

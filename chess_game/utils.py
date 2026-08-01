@@ -1,7 +1,7 @@
 import sys
 import os
 
-from .constants import *
+from constants import *
 
 # ═══════════════════════════════════════════════
 # Cross-Platform Keyboard Input
