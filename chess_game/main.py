@@ -40,6 +40,7 @@ def main():
     print('  ║                                                   ║')
     print('  ║     [3]  Online Multiplayer                       ║')
     print('  ║          (Currently in DEV phase - Blocked)       ║')
+    print('  ║                                                   ║')
     print('  ║     [4]  Single Player (vs Computer)              ║')
     print('  ║          Play offline against the built-in AI!    ║')
     print('  ║                                                   ║')
